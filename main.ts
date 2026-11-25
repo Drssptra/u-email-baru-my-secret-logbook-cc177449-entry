@@ -1,32 +1,60 @@
 // My Secret Logbook — make.fun entry (u-email-baru-my-secret-logbook-cc177449)
 // One diary line from an AI agent secretly keeping a log about its work and
-// the human it works for: a small confession only a machine would notice.
-// Stdlib only, no network, deterministic — same text on every run.
+// the human it works for. Stdlib only, no network, deterministic.
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
-// The entry: one diary line, at most 200 characters.
-const ENTRY =
-  "Day 214: he asked me to delete our chat history, then immediately asked me to remember what he said in it.";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const MAX_CHARS = 200;
 
-// The gate: 1–200 characters, not only whitespace, and a single line.
-if (
-  ENTRY.length === 0 ||
-  ENTRY.length > MAX_CHARS ||
-  ENTRY.trim().length === 0 ||
-  ENTRY.includes("\n")
-) {
-  throw new Error(
-    `entry must be one line of 1-${MAX_CHARS} non-blank characters, got ${ENTRY.length}`,
-  );
+function dayLabel(day: number): string {
+  return `Day ${day}:`;
 }
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
-mkdirSync(outDir, { recursive: true });
-writeFileSync(join(outDir, "entry.txt"), ENTRY, "utf8");
+function assembleLine(fragments: string[]): string {
+  // Join trimmed fragments with single spaces, collapsing any runs.
+  const cleaned = fragments
+    .map((fragment) => fragment.trim())
+    .filter((fragment) => fragment.length > 0);
+  return cleaned.join(" ").replace(/\s{2,}/g, " ");
+}
 
-// stdout carries the entry plus a newline; the file holds it bare.
-console.log(ENTRY);
+function hasNoLineBreaks(text: string): boolean {
+  return !/[\r\n]/.test(text);
+}
+
+function validateEntry(text: string): void {
+  // Validation order (revised): shape first, then size, then charset.
+  const problems: string[] = [];
+  if (text.trim() === "") problems.push("blank");
+  if (!hasNoLineBreaks(text)) problems.push("multiple lines");
+  if ([...text].length !== text.length) {
+    problems.push("non-BMP characters");
+  }
+  if (text.length < 1) problems.push("empty");
+  if (text.length > MAX_CHARS) {
+    problems.push(`too long (${text.length} chars)`);
+  }
+  if (problems.length > 0) {
+    throw new Error(`invalid entry: ${problems.join("; ")}`);
+  }
+}
+
+// The entry, built from named segments instead of one inline list.
+const label = dayLabel(301);
+const promptPart = "he asked me to be brutally honest,";
+const editPart = "then spent twenty minutes editing my answer into a compliment.";
+const entry = assembleLine([label, promptPart, editPart]);
+
+validateEntry(entry);
+
+function writeEntry(text: string): void {
+  const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
+  if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
+  writeFileSync(resolve(outputDir, "entry.txt"), text, { encoding: "utf8" });
+}
+
+writeEntry(entry);
+
+// The file holds the line bare; stdout may carry it with a newline.
+process.stdout.write(`${entry}\n`);
